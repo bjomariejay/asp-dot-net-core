@@ -1,0 +1,397 @@
+employeesAPI CRUD Guide
+=======================
+
+Step-by-step implementation
+---------------------------
+0. Project structure
+   - `Controllers/` → ASP.NET Core API controllers (`EmployeesController`).
+   - `Data/` → repositories and data access abstractions (`EmployeesRepository`).
+   - `Models/` → entity and request DTO classes (`Employee`, `CreateEmployeeRequest`, `UpdateEmployeeRequest`).
+   - `Program.cs` → application entry point + service registrations.
+   - `appsettings*.json` → configuration, including the SQL connection string.
+   - `employeesAPI.csproj` → project file with NuGet references (Swashbuckle, System.Data.SqlClient).
+1. Install dependencies
+   - Add the NuGet package `System.Data.SqlClient` to enable raw SQL Server access (see `employeesAPI.csproj`).
+   - Keep `Swashbuckle.AspNetCore` for Swagger UI/testing.
+2. Configure the database connection
+   - Store the SQL Server connection string in `appsettings.json` (and optionally in `appsettings.Development.json`) under `ConnectionStrings:DefaultConnection`.
+3. Define models/DTOs
+   - `Models/Employee.cs` mirrors the `Employees` table columns returned by GET/POST/PUT.
+   - `Models/CreateEmployeeRequest.cs` and `Models/UpdateEmployeeRequest.cs` describe POST/PUT payloads with validation attributes.
+4. Build the data layer
+   - Create `Data/EmployeesRepository.cs` with an `IEmployeesRepository` interface and `SqlEmployeesRepository` implementation.
+   - Implement `GetEmployeesAsync`, `CreateEmployeeAsync`, `UpdateEmployeeAsync`, and `DeleteEmployeeAsync` using parameterized SQL commands plus helper methods to map `SqlDataReader` rows into `Employee` objects.
+5. Register services
+   - In `Program.cs`, register `IEmployeesRepository` with DI (`AddScoped`) and ensure controllers/Swagger services are enabled.
+6. Create the API controller
+   - `Controllers/EmployeesController.cs` exposes CRUD endpoints:
+     * `GET /api/employees` → list employees
+     * `POST /api/employees` → create employee
+     * `PUT /api/employees/{id}` → update employee
+     * `DELETE /api/employees/{id}` → delete employee
+7. Run and test
+   - Execute `dotnet build` then `dotnet run`.
+   - Use Swagger UI (`/swagger`) or tools like `curl`/`Postman` to call the endpoints against your SQL Server instance.
+
+Added/updated code listings
+---------------------------
+
+employeesAPI.csproj
+```
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.5" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+</Project>
+```
+
+appsettings.json
+```
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=DESKTOP-HKRIGT4\\SQLEXPRESS;Database=db_sample;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"
+  }
+}
+```
+
+Program.cs
+```
+using employeesAPI.Data;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+builder.Services.AddScoped<IEmployeesRepository, SqlEmployeesRepository>();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+```
+
+Models/Employee.cs
+```
+namespace employeesAPI.Models;
+
+public sealed class Employee
+{
+    public int EmployeeId { get; init; }
+    public string FirstName { get; init; } = string.Empty;
+    public string LastName { get; init; } = string.Empty;
+    public string? Email { get; init; }
+    public DateTime HireDate { get; init; }
+    public bool? IsActive { get; init; }
+    public DateTime? CreatedAt { get; init; }
+}
+```
+
+Models/CreateEmployeeRequest.cs
+```
+using System.ComponentModel.DataAnnotations;
+
+namespace employeesAPI.Models;
+
+public sealed class CreateEmployeeRequest
+{
+    [Required]
+    [StringLength(100)]
+    public string FirstName { get; init; } = string.Empty;
+
+    [Required]
+    [StringLength(100)]
+    public string LastName { get; init; } = string.Empty;
+
+    [EmailAddress]
+    [StringLength(150)]
+    public string? Email { get; init; }
+
+    [Required]
+    public DateTime HireDate { get; init; }
+
+    public bool? IsActive { get; init; }
+
+    public DateTime? CreatedAt { get; init; }
+}
+```
+
+Models/UpdateEmployeeRequest.cs
+```
+using System.ComponentModel.DataAnnotations;
+
+namespace employeesAPI.Models;
+
+public sealed class UpdateEmployeeRequest
+{
+    [Required]
+    [StringLength(100)]
+    public string FirstName { get; init; } = string.Empty;
+
+    [Required]
+    [StringLength(100)]
+    public string LastName { get; init; } = string.Empty;
+
+    [EmailAddress]
+    [StringLength(150)]
+    public string? Email { get; init; }
+
+    [Required]
+    public DateTime HireDate { get; init; }
+
+    public bool? IsActive { get; init; }
+
+    public DateTime? CreatedAt { get; init; }
+}
+```
+
+Data/EmployeesRepository.cs
+```
+using System.Data.SqlClient;
+using employeesAPI.Models;
+
+namespace employeesAPI.Data;
+
+public interface IEmployeesRepository
+{
+    Task<IReadOnlyList<Employee>> GetEmployeesAsync(CancellationToken cancellationToken = default);
+    Task<Employee> CreateEmployeeAsync(CreateEmployeeRequest request, CancellationToken cancellationToken = default);
+    Task<Employee?> UpdateEmployeeAsync(int employeeId, UpdateEmployeeRequest request, CancellationToken cancellationToken = default);
+    Task<bool> DeleteEmployeeAsync(int employeeId, CancellationToken cancellationToken = default);
+}
+
+public sealed class SqlEmployeesRepository : IEmployeesRepository
+{
+    private readonly string _connectionString;
+
+    public SqlEmployeesRepository(IConfiguration configuration)
+    {
+        _connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
+    }
+
+    public async Task<IReadOnlyList<Employee>> GetEmployeesAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EmployeeId, FirstName, LastName, Email, HireDate, IsActive, CreatedAt FROM Employees";
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var results = new List<Employee>();
+
+        var employeeIdOrdinal = reader.GetOrdinal("EmployeeId");
+        var firstNameOrdinal = reader.GetOrdinal("FirstName");
+        var lastNameOrdinal = reader.GetOrdinal("LastName");
+        var emailOrdinal = reader.GetOrdinal("Email");
+        var hireDateOrdinal = reader.GetOrdinal("HireDate");
+        var isActiveOrdinal = reader.GetOrdinal("IsActive");
+        var createdAtOrdinal = reader.GetOrdinal("CreatedAt");
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add(MapEmployee(reader, employeeIdOrdinal, firstNameOrdinal, lastNameOrdinal,
+                emailOrdinal, hireDateOrdinal, isActiveOrdinal, createdAtOrdinal));
+        }
+
+        return results;
+    }
+
+    public async Task<Employee> CreateEmployeeAsync(CreateEmployeeRequest request, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = @"
+INSERT INTO Employees (FirstName, LastName, Email, HireDate, IsActive, CreatedAt)
+OUTPUT INSERTED.EmployeeId, INSERTED.FirstName, INSERTED.LastName, INSERTED.Email,
+       INSERTED.HireDate, INSERTED.IsActive, INSERTED.CreatedAt
+VALUES (@FirstName, @LastName, @Email, @HireDate, @IsActive, @CreatedAt);";
+
+        command.Parameters.AddWithValue("@FirstName", request.FirstName);
+        command.Parameters.AddWithValue("@LastName", request.LastName);
+        command.Parameters.AddWithValue("@Email", (object?)request.Email ?? DBNull.Value);
+        command.Parameters.AddWithValue("@HireDate", request.HireDate);
+        command.Parameters.AddWithValue("@IsActive", (object?)request.IsActive ?? DBNull.Value);
+        command.Parameters.AddWithValue("@CreatedAt", (object?)request.CreatedAt ?? DateTime.UtcNow);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            return MapEmployee(reader);
+        }
+
+        throw new InvalidOperationException("Could not insert employee.");
+    }
+
+    public async Task<Employee?> UpdateEmployeeAsync(int employeeId, UpdateEmployeeRequest request, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = @"
+UPDATE Employees
+SET FirstName = @FirstName,
+    LastName = @LastName,
+    Email = @Email,
+    HireDate = @HireDate,
+    IsActive = @IsActive,
+    CreatedAt = @CreatedAt
+OUTPUT INSERTED.EmployeeId, INSERTED.FirstName, INSERTED.LastName, INSERTED.Email,
+       INSERTED.HireDate, INSERTED.IsActive, INSERTED.CreatedAt
+WHERE EmployeeId = @EmployeeId;";
+
+        command.Parameters.AddWithValue("@EmployeeId", employeeId);
+        command.Parameters.AddWithValue("@FirstName", request.FirstName);
+        command.Parameters.AddWithValue("@LastName", request.LastName);
+        command.Parameters.AddWithValue("@Email", (object?)request.Email ?? DBNull.Value);
+        command.Parameters.AddWithValue("@HireDate", request.HireDate);
+        command.Parameters.AddWithValue("@IsActive", (object?)request.IsActive ?? DBNull.Value);
+        command.Parameters.AddWithValue("@CreatedAt", (object?)request.CreatedAt ?? DBNull.Value);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            return MapEmployee(reader);
+        }
+
+        return null;
+    }
+
+    public async Task<bool> DeleteEmployeeAsync(int employeeId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM Employees WHERE EmployeeId = @EmployeeId";
+        command.Parameters.AddWithValue("@EmployeeId", employeeId);
+
+        var affected = await command.ExecuteNonQueryAsync(cancellationToken);
+        return affected > 0;
+    }
+
+    private static Employee MapEmployee(SqlDataReader reader)
+    {
+        var employeeIdOrdinal = reader.GetOrdinal("EmployeeId");
+        var firstNameOrdinal = reader.GetOrdinal("FirstName");
+        var lastNameOrdinal = reader.GetOrdinal("LastName");
+        var emailOrdinal = reader.GetOrdinal("Email");
+        var hireDateOrdinal = reader.GetOrdinal("HireDate");
+        var isActiveOrdinal = reader.GetOrdinal("IsActive");
+        var createdAtOrdinal = reader.GetOrdinal("CreatedAt");
+
+        return MapEmployee(reader, employeeIdOrdinal, firstNameOrdinal, lastNameOrdinal, emailOrdinal,
+            hireDateOrdinal, isActiveOrdinal, createdAtOrdinal);
+    }
+
+    private static Employee MapEmployee(SqlDataReader reader, int employeeIdOrdinal, int firstNameOrdinal,
+        int lastNameOrdinal, int emailOrdinal, int hireDateOrdinal, int isActiveOrdinal, int createdAtOrdinal)
+    {
+        return new Employee
+        {
+            EmployeeId = reader.GetInt32(employeeIdOrdinal),
+            FirstName = reader.GetString(firstNameOrdinal),
+            LastName = reader.GetString(lastNameOrdinal),
+            Email = reader.IsDBNull(emailOrdinal) ? null : reader.GetString(emailOrdinal),
+            HireDate = reader.GetDateTime(hireDateOrdinal),
+            IsActive = reader.IsDBNull(isActiveOrdinal) ? null : reader.GetBoolean(isActiveOrdinal),
+            CreatedAt = reader.IsDBNull(createdAtOrdinal) ? null : reader.GetDateTime(createdAtOrdinal)
+        };
+    }
+}
+```
+
+Controllers/EmployeesController.cs
+```
+using employeesAPI.Data;
+using employeesAPI.Models;
+using Microsoft.AspNetCore.Mvc;
+
+namespace employeesAPI.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class EmployeesController : ControllerBase
+{
+    private readonly IEmployeesRepository _repository;
+
+    public EmployeesController(IEmployeesRepository repository)
+    {
+        _repository = repository;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<Employee>>> GetAsync(CancellationToken cancellationToken)
+    {
+        var employees = await _repository.GetEmployeesAsync(cancellationToken);
+        return Ok(employees);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<Employee>> CreateAsync([FromBody] CreateEmployeeRequest request, CancellationToken cancellationToken)
+    {
+        var employee = await _repository.CreateEmployeeAsync(request, cancellationToken);
+        return Created($"/api/employees/{employee.EmployeeId}", employee);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<Employee>> UpdateAsync(int id, [FromBody] UpdateEmployeeRequest request, CancellationToken cancellationToken)
+    {
+        var employee = await _repository.UpdateEmployeeAsync(id, request, cancellationToken);
+        if (employee is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(employee);
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteAsync(int id, CancellationToken cancellationToken)
+    {
+        var deleted = await _repository.DeleteEmployeeAsync(id, cancellationToken);
+        if (!deleted)
+        {
+            return NotFound();
+        }
+
+        return NoContent();
+    }
+}
+```
