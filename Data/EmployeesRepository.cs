@@ -1,3 +1,4 @@
+using BCryptNet = BCrypt.Net.BCrypt;
 using employeesAPI.Models;
 using System.Data;
 using System.Data.SqlClient;
@@ -71,12 +72,20 @@ public sealed class SqlEmployeesRepository : IEmployeesRepository
         command.CommandText = "sp_InsertEmployee";
         command.CommandType = CommandType.StoredProcedure;
 
+        if (string.IsNullOrWhiteSpace(request.Password))
+        {
+            throw new ArgumentException("A password is required to create an employee.", nameof(request.Password));
+        }
+
+        var hashedPassword = BCryptNet.HashPassword(request.Password);
+
         command.Parameters.AddWithValue("@FirstName", request.FirstName);
         command.Parameters.AddWithValue("@LastName", request.LastName);
         command.Parameters.AddWithValue("@Email", (object?)request.Email ?? DBNull.Value);
         command.Parameters.AddWithValue("@HireDate", request.HireDate);
         command.Parameters.AddWithValue("@IsActive", (object?)request.IsActive ?? DBNull.Value);
         command.Parameters.AddWithValue("@CreatedAt", (object?)request.CreatedAt ?? DateTime.UtcNow);
+        command.Parameters.AddWithValue("@Password", hashedPassword);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (await reader.ReadAsync(cancellationToken))

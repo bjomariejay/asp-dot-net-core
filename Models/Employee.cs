@@ -33,6 +33,10 @@ public sealed class CreateEmployeeRequest
     public bool? IsActive { get; init; }
 
     public DateTime? CreatedAt { get; init; }
+
+    [Required]
+    [StringLength(200, MinimumLength = 8)]
+    public string Password { get; init; } = string.Empty;
 }
 
 public sealed class UpdateEmployeeRequest
