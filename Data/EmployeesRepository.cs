@@ -61,11 +61,15 @@ public sealed class SqlEmployeesRepository : IEmployeesRepository
         await connection.OpenAsync(cancellationToken);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = @"
-INSERT INTO Employees (FirstName, LastName, Email, HireDate, IsActive, CreatedAt)
-OUTPUT INSERTED.EmployeeId, INSERTED.FirstName, INSERTED.LastName, INSERTED.Email,
-       INSERTED.HireDate, INSERTED.IsActive, INSERTED.CreatedAt
-VALUES (@FirstName, @LastName, @Email, @HireDate, @IsActive, @CreatedAt);";
+//        command.CommandText = @"
+//INSERT INTO Employees (FirstName, LastName, Email, HireDate, IsActive, CreatedAt)
+//OUTPUT INSERTED.EmployeeId, INSERTED.FirstName, INSERTED.LastName, INSERTED.Email,
+//       INSERTED.HireDate, INSERTED.IsActive, INSERTED.CreatedAt
+//VALUES (@FirstName, @LastName, @Email, @HireDate, @IsActive, @CreatedAt);";
+
+      
+        command.CommandText = "sp_InsertEmployee";
+        command.CommandType = CommandType.StoredProcedure;
 
         command.Parameters.AddWithValue("@FirstName", request.FirstName);
         command.Parameters.AddWithValue("@LastName", request.LastName);
