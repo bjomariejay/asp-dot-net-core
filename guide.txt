@@ -3,40 +3,26 @@ employeesAPI CRUD Guide
 
 Step-by-step implementation
 ---------------------------
-0. Project structure
-   - `Controllers/` → ASP.NET Core API controllers (`EmployeesController`).
-   - `Data/` → repositories and data access abstractions (`EmployeesRepository`).
-   - `Models/` → entity and request DTO classes (`Employee`, `CreateEmployeeRequest`, `UpdateEmployeeRequest`).
-   - `Program.cs` → application entry point + service registrations.
-   - `appsettings*.json` → configuration, including the SQL connection string.
-   - `employeesAPI.csproj` → project file with NuGet references (Swashbuckle, System.Data.SqlClient).
-1. Install dependencies
+0. Review the project structure (understand where each responsibility lives before editing files)
+
+   Take a minute to familiarize yourself with the folders so you always know which file to touch for controllers, repositories, models, or configuration.
+
+   - `Controllers/` → ASP.NET Core API controllers (`EmployeesController`). This is where you register routes with `[Route]`/`[HttpGet]` attributes, wire up dependencies via constructor injection, and keep your request/response logic so clients know which URL to call.
+   - `Data/` → repositories and data access abstractions (`EmployeesRepository`). This layer encapsulates SQL commands, parameter binding, and result mapping so controllers never talk to the database directly.
+   - `Models/` → entity and request DTO classes (`Employee`, `CreateEmployeeRequest`, `UpdateEmployeeRequest`). Use these types to enforce validation attributes and keep the contract between controllers and the repository explicit.
+   - `Program.cs` → application entry point + service registrations. Configure dependency injection, middleware (Swagger, HTTPS redirection), and map the controllers here.
+   - `appsettings*.json` → configuration, including the SQL connection string. Store `ConnectionStrings:DefaultConnection` and other environment-specific settings that repositories read via `IConfiguration`.
+   - `employeesAPI.csproj` → project file with NuGet references (Swashbuckle, System.Data.SqlClient). Update this when new packages or target frameworks are required so builds pull in the right dependencies.
+
+1. Install dependencies (add the NuGet packages needed for SQL Server access and API testing)
+
+   Make sure the project references the libraries that enable raw SQL access and Swagger tooling; without them, later steps will fail to build.
+
    - Add the NuGet package `System.Data.SqlClient` to enable raw SQL Server access (see `employeesAPI.csproj`).
    - Keep `Swashbuckle.AspNetCore` for Swagger UI/testing.
-2. Configure the database connection
-   - Store the SQL Server connection string in `appsettings.json` (and optionally in `appsettings.Development.json`) under `ConnectionStrings:DefaultConnection`.
-3. Define models/DTOs
-   - `Models/Employee.cs` mirrors the `Employees` table columns returned by GET/POST/PUT.
-   - `Models/CreateEmployeeRequest.cs` and `Models/UpdateEmployeeRequest.cs` describe POST/PUT payloads with validation attributes.
-4. Build the data layer
-   - Create `Data/EmployeesRepository.cs` with an `IEmployeesRepository` interface and `SqlEmployeesRepository` implementation.
-   - Implement `GetEmployeesAsync`, `CreateEmployeeAsync`, `UpdateEmployeeAsync`, and `DeleteEmployeeAsync` using parameterized SQL commands plus helper methods to map `SqlDataReader` rows into `Employee` objects.
-5. Register services
-   - In `Program.cs`, register `IEmployeesRepository` with DI (`AddScoped`) and ensure controllers/Swagger services are enabled.
-6. Create the API controller
-   - `Controllers/EmployeesController.cs` exposes CRUD endpoints:
-     * `GET /api/employees` → list employees
-     * `POST /api/employees` → create employee
-     * `PUT /api/employees/{id}` → update employee
-     * `DELETE /api/employees/{id}` → delete employee
-7. Run and test
-   - Execute `dotnet build` then `dotnet run`.
-   - Use Swagger UI (`/swagger`) or tools like `curl`/`Postman` to call the endpoints against your SQL Server instance.
 
-Added/updated code listings
----------------------------
+   employeesAPI.csproj
 
-employeesAPI.csproj
 ```
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
@@ -54,7 +40,15 @@ employeesAPI.csproj
 </Project>
 ```
 
-appsettings.json
+2. Configure the database connection (persist the SQL Server connection string that repositories consume)
+
+   Storing the connection string in configuration keeps secrets out of code and lets every environment point to its own SQL Server.
+
+   - Store the SQL Server connection string in `appsettings.json` (and optionally `appsettings.Development.json`) under `ConnectionStrings:DefaultConnection`.
+   - Example configuration:
+
+   appsettings.json
+
 ```
 {
   "Logging": {
@@ -70,39 +64,15 @@ appsettings.json
 }
 ```
 
-Program.cs
-```
-using employeesAPI.Data;
+3. Define models/DTOs (shape the entities and payloads your controller exchanges with clients)
 
-var builder = WebApplication.CreateBuilder(args);
+   Clear models ensure the repository knows how to map SQL rows and the controller knows which fields to accept or return.
 
-// Add services to the container.
+   - `Models/Employee.cs` mirrors the `Employees` table columns returned by GET/POST/PUT.
+   - `Models/CreateEmployeeRequest.cs` and `Models/UpdateEmployeeRequest.cs` describe POST/PUT payloads with validation attributes.
 
-builder.Services.AddControllers();
-builder.Services.AddScoped<IEmployeesRepository, SqlEmployeesRepository>();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+   Models/Employee.cs
 
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
-```
-
-Models/Employee.cs
 ```
 namespace employeesAPI.Models;
 
@@ -118,7 +88,8 @@ public sealed class Employee
 }
 ```
 
-Models/CreateEmployeeRequest.cs
+   Models/CreateEmployeeRequest.cs
+
 ```
 using System.ComponentModel.DataAnnotations;
 
@@ -147,7 +118,8 @@ public sealed class CreateEmployeeRequest
 }
 ```
 
-Models/UpdateEmployeeRequest.cs
+   Models/UpdateEmployeeRequest.cs
+
 ```
 using System.ComponentModel.DataAnnotations;
 
@@ -176,7 +148,15 @@ public sealed class UpdateEmployeeRequest
 }
 ```
 
-Data/EmployeesRepository.cs
+4. Build the data layer (implement the repository that talks to SQL Server using parameterized commands)
+
+   This is where the app actually speaks to SQL Server; keeping it isolated behind an interface makes it testable and easy to swap later.
+
+   - Create `Data/EmployeesRepository.cs` with an `IEmployeesRepository` interface and `SqlEmployeesRepository` implementation.
+   - Implement `GetEmployeesAsync`, `CreateEmployeeAsync`, `UpdateEmployeeAsync`, and `DeleteEmployeeAsync` using parameterized SQL commands plus helper methods to map `SqlDataReader` rows into `Employee` objects.
+
+   Data/EmployeesRepository.cs
+
 ```
 using System.Data.SqlClient;
 using employeesAPI.Models;
@@ -337,7 +317,53 @@ WHERE EmployeeId = @EmployeeId;";
 }
 ```
 
-Controllers/EmployeesController.cs
+5. Register services (wire repositories, controllers, and Swagger/OpenAPI in Program.cs)
+
+   Dependency injection only works if the services are registered, so this step ties together the data layer and MVC pipeline.
+
+   - In `Program.cs`, register `IEmployeesRepository` with DI (`AddScoped`) and ensure controllers/Swagger services are enabled.
+
+   Program.cs
+
+```
+using employeesAPI.Data;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+
+builder.Services.AddControllers();
+builder.Services.AddScoped<IEmployeesRepository, SqlEmployeesRepository>();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+```
+
+6. Create the API controller (map HTTP verbs to repository calls for CRUD operations)
+
+   The controller translates HTTP requests into repository calls and returns typed responses, acting as the façade for clients.
+
+   - `Controllers/EmployeesController.cs` exposes CRUD endpoints: `GET /api/employees`, `POST /api/employees`, `PUT /api/employees/{id}`, `DELETE /api/employees/{id}`.
+
+   Controllers/EmployeesController.cs
+
 ```
 using employeesAPI.Data;
 using employeesAPI.Models;
@@ -395,3 +421,10 @@ public class EmployeesController : ControllerBase
     }
 }
 ```
+
+7. Run and test (verify everything builds, runs, and responds via Swagger or external tools)
+
+   Building and running confirms there are no compile/runtime errors, and manual testing checks the endpoints against a real database.
+
+   - Execute `dotnet build` then `dotnet run`.
+   - Use Swagger UI (`/swagger`) or tools like `curl`/`Postman` to call the endpoints against your SQL Server instance.

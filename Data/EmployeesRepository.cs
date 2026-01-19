@@ -1,5 +1,6 @@
-using System.Data.SqlClient;
 using employeesAPI.Models;
+using System.Data;
+using System.Data.SqlClient;
 
 namespace employeesAPI.Data;
 
@@ -26,8 +27,12 @@ public sealed class SqlEmployeesRepository : IEmployeesRepository
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
 
+        //await using var command = connection.CreateCommand();
+        //command.CommandText = "SELECT EmployeeId, FirstName, LastName, Email, HireDate, IsActive, CreatedAt FROM Employees";
+
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT EmployeeId, FirstName, LastName, Email, HireDate, IsActive, CreatedAt FROM Employees";
+        command.CommandText = "sp_GetAllEmployees";
+        command.CommandType = CommandType.StoredProcedure;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
