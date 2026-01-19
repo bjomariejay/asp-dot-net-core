@@ -93,17 +93,20 @@ public sealed class SqlEmployeesRepository : IEmployeesRepository
         await connection.OpenAsync(cancellationToken);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = @"
-UPDATE Employees
-SET FirstName = @FirstName,
-    LastName = @LastName,
-    Email = @Email,
-    HireDate = @HireDate,
-    IsActive = @IsActive,
-    CreatedAt = @CreatedAt
-OUTPUT INSERTED.EmployeeId, INSERTED.FirstName, INSERTED.LastName, INSERTED.Email,
-       INSERTED.HireDate, INSERTED.IsActive, INSERTED.CreatedAt
-WHERE EmployeeId = @EmployeeId;";
+        //        command.CommandText = @"
+        //UPDATE Employees
+        //SET FirstName = @FirstName,
+        //    LastName = @LastName,
+        //    Email = @Email,
+        //    HireDate = @HireDate,
+        //    IsActive = @IsActive,
+        //    CreatedAt = @CreatedAt
+        //OUTPUT INSERTED.EmployeeId, INSERTED.FirstName, INSERTED.LastName, INSERTED.Email,
+        //       INSERTED.HireDate, INSERTED.IsActive, INSERTED.CreatedAt
+        //WHERE EmployeeId = @EmployeeId;";
+
+        command.CommandText = "sp_UpdateEmployee";
+        command.CommandType = CommandType.StoredProcedure;
 
         command.Parameters.AddWithValue("@EmployeeId", employeeId);
         command.Parameters.AddWithValue("@FirstName", request.FirstName);
@@ -128,7 +131,9 @@ WHERE EmployeeId = @EmployeeId;";
         await connection.OpenAsync(cancellationToken);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM Employees WHERE EmployeeId = @EmployeeId";
+        //command.CommandText = "DELETE FROM Employees WHERE EmployeeId = @EmployeeId";
+        command.CommandText = "sp_DeleteEmployee";
+        command.CommandType = CommandType.StoredProcedure;
         command.Parameters.AddWithValue("@EmployeeId", employeeId);
 
         var affected = await command.ExecuteNonQueryAsync(cancellationToken);
