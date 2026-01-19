@@ -117,6 +117,12 @@ public sealed class SqlEmployeesRepository : IEmployeesRepository
         command.CommandText = "sp_UpdateEmployee";
         command.CommandType = CommandType.StoredProcedure;
 
+        string? hashedPassword = null;
+        if (!string.IsNullOrWhiteSpace(request.Password))
+        {
+            hashedPassword = BCryptNet.HashPassword(request.Password);
+        }
+
         command.Parameters.AddWithValue("@EmployeeId", employeeId);
         command.Parameters.AddWithValue("@FirstName", request.FirstName);
         command.Parameters.AddWithValue("@LastName", request.LastName);
@@ -124,6 +130,7 @@ public sealed class SqlEmployeesRepository : IEmployeesRepository
         command.Parameters.AddWithValue("@HireDate", request.HireDate);
         command.Parameters.AddWithValue("@IsActive", (object?)request.IsActive ?? DBNull.Value);
         command.Parameters.AddWithValue("@CreatedAt", (object?)request.CreatedAt ?? DBNull.Value);
+        command.Parameters.AddWithValue("@Password", (object?)hashedPassword ?? DBNull.Value);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (await reader.ReadAsync(cancellationToken))

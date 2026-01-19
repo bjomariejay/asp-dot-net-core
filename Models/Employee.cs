@@ -59,4 +59,7 @@ public sealed class UpdateEmployeeRequest
     public bool? IsActive { get; init; }
 
     public DateTime? CreatedAt { get; init; }
+
+    [StringLength(200, MinimumLength = 8)]
+    public string? Password { get; init; }
 }
